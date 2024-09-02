@@ -1,113 +1,314 @@
-import json
-from typing import Dict, Any
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage
+from agents.agents import SummarizerAgent
+from states.state import AgentGraphState
+from prompts.prompts import summarization_prompt_template
+import requests
 from termcolor import colored
-from agents.agents import (
-    AnalysisNode2Agent,
-    FeedbackGenerationAgent,
-    ScoringAgent,
-    ParaphrasingAgent,
-)
-from tools.preprocessing_tool import preprocessing_tool
-from tools.analysis_node1_tool import analysis_node1_tool
-from tools.knowledge_base_loader import knowledge_base_loader
-from tools.format_report import format_report
-from states.state import AgentGraphState, get_agent_graph_state, state
+import feedparser
+import json
+from datetime import datetime, timedelta
+from bs4 import BeautifulSoup
+import re
+
+def xml_parser_url_collection(state):
+    # Fetch URLs from the urls collection using the defined route
+    try:
+        response = requests.get('http://localhost:5000/api/urls')
+        response.raise_for_status()
+        rss_feed_urls = [url_doc['url'] for url_doc in response.json()]
+    except requests.exceptions.RequestException as e:
+        print(colored(f"Failed to fetch URLs from the database: {e}", 'red'))
+        return {"articles": []}
+
+    articles = []
+    days_ago = 0 # Adjust this value to change the date range
+    target_date = (datetime.utcnow() - timedelta(days=days_ago)).date()
+
+    for url in rss_feed_urls:
+        try:
+            feed = feedparser.parse(url)
+            if feed.bozo:
+                print(colored(f"Failed to parse RSS feed from {url}: {feed.bozo_exception}", 'red'))
+                continue
+
+            for entry in feed.entries:
+                published_date_str = entry.get("published", "")
+                if not published_date_str:
+                    continue
+
+                try:
+                    published_date = datetime.strptime(published_date_str, "%a, %d %b %Y %H:%M:%S %Z")
+                except ValueError:
+                    try:
+                        published_date = datetime.strptime(published_date_str, "%a, %d %b %Y %H:%M:%S %z")
+                    except ValueError:
+                        print(colored(f"Unable to parse date: {published_date_str}", 'yellow'))
+                        continue
+
+                if published_date.date() == target_date:
+                    article = {
+                        "title": entry.get("title", "No Title"),
+                        "link": entry.get("link", "No Link"),
+                        "author": entry.get("author", "Unknown Author"),
+                        "published_date": published_date.isoformat(),
+                    }
+                    articles.append(article)
+
+        except Exception as e:
+            print(colored(f"Failed to fetch or parse RSS feed from {url}: {e}", 'red'))
+
+    parsed_articles = {"articles": articles}
+
+    # Save articles to the database
+    if articles:
+        try:
+            response = requests.post('http://localhost:5000/api/articles', json=parsed_articles)
+            response.raise_for_status()
+            print(colored(f"Saved {len(articles)} articles from {days_ago} days ago to database successfully", 'green'))
+        except requests.exceptions.RequestException as e:
+            print(colored(f"Failed to save articles to database: {e}", 'red'))
+    else:
+        print(colored(f"No articles from {days_ago} days ago found to save", 'yellow'))
+
+    with open("D:/VentureInternship/AI Agent/SummarizerAgent/server/response.txt", "a") as file:
+        file.write(f"\nXML_parser_Tool: Fetched {len(articles)} articles from {days_ago} days ago")
+    
+    # Make sure to update state instead of returning a new dict
+    state['articles'] = parsed_articles['articles']
+    return state
+
+def xml_parser_new_urls(state):
+    # Fetch URLs from the new_urls collection using the defined route
+    try:
+        response = requests.get('http://localhost:5000/api/urls/new')
+        response.raise_for_status()
+        new_urls = response.json()
+    except requests.exceptions.RequestException as e:
+        print(colored(f"Failed to fetch URLs from the database: {e}", 'red'))
+        return
+
+    if not new_urls:
+        print(colored("No URLs found in the new_urls collection", 'yellow'))
+        return
+
+    articles = []
+    for url_doc in new_urls:
+        url = url_doc['url']
+        try:
+            feed = feedparser.parse(url)
+            if feed.bozo:
+                print(colored(f"Failed to parse RSS feed from {url}: {feed.bozo_exception}", 'red'))
+                continue
+
+            for entry in feed.entries:
+                article = {
+                    "title": entry.get("title", "No Title"),
+                    "link": entry.get("link", "No Link"),
+                    "author": entry.get("author", "Unknown Author"),
+                    "published_date": entry.get("published", "Unknown Date"),
+                }
+                articles.append(article)
+
+            # Update lastChecked for this URL
+            update_data = {
+                'lastChecked': datetime.utcnow().isoformat()
+            }
+            update_response = requests.put(f'http://localhost:5000/api/urls/new/{url_doc["_id"]}', json=update_data)
+            if update_response.status_code == 404:
+                print(colored(f"URL with id {url_doc['_id']} not found in the database", 'yellow'))
+            else:
+                update_response.raise_for_status()
+
+        except Exception as e:
+            print(colored(f"Failed to fetch or parse RSS feed from {url}: {e}", 'red'))
+
+    parsed_articles = {"articles": articles}
+
+    # Save articles to the database
+    try:
+        response = requests.post('http://localhost:5000/api/articles', json=parsed_articles)
+        response.raise_for_status()
+        print(colored(f"Saved {len(articles)} articles to database successfully", 'green'))
+    except requests.exceptions.RequestException as e:
+        print(colored(f"Failed to save articles to database: {e}", 'red'))
+
+    # Transfer URLs from new_urls to urls collection and then delete from new_urls
+    for url_doc in new_urls:
+        try:
+            # Prepare the URL document for the urls collection
+            url_data = {
+                'url': url_doc['url'],
+                'dateAdded': url_doc.get('dateAdded', datetime.utcnow().isoformat()),
+                'lastChecked': url_doc.get('lastChecked', datetime.utcnow().isoformat()),
+                'status': url_doc.get('status', 'active')
+            }
+
+            # Add URL to urls collection
+            add_response = requests.post('http://localhost:5000/api/urls', json=url_data)
+            add_response.raise_for_status()
+            print(colored(f"Added URL {url_doc['url']} to urls collection", 'green'))
+
+            # Delete URL from new_urls collection
+            delete_response = requests.delete(f'http://localhost:5000/api/urls/new/{url_doc["_id"]}')
+            if delete_response.status_code == 404:
+                print(colored(f"URL with id {url_doc['_id']} not found for deletion in new_urls", 'yellow'))
+            else:
+                delete_response.raise_for_status()
+                print(colored(f"Deleted URL with id {url_doc['_id']} from new_urls collection", 'green'))
+        except requests.exceptions.RequestException as e:
+            print(colored(f"Failed to transfer URL {url_doc['url']}: {e}", 'red'))
+
+    with open("D:/VentureInternship/AI Agent/SummarizerAgent/server/response.txt", "a") as file:
+        file.write(f"\nXML_parser_Tool: Processed {len(new_urls)} URLs, found {len(articles)} articles, transferred URLs to urls collection, and deleted from new_urls")
+
+    # Make sure to update state instead of returning a new dict
+    # state['articles'] += parsed_articles['articles']
+    state['articles'] = parsed_articles['articles']
+    return state
+
+def scrape_website(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+        paragraphs = soup.find_all('p')
+        content = "\n".join([para.get_text() for para in paragraphs])
+        return content
+    except requests.RequestException as e:
+        print(colored(f"Failed to scrape content from {url}: {e}", 'red'))
+        return None
+def content_scraper_tool(state):
+    # Get articles from the articles collection and clear it
+    try:
+        response = requests.get('http://localhost:5000/api/scraped-articles/scrape-and-clear')
+        response.raise_for_status()
+        articles = response.json()['articles']
+    except requests.RequestException as e:
+        print(colored(f"Failed to get articles: {e}", 'red'))
+        return
+
+    articles_with_content = []
+
+    for article in articles:
+        if 'link' in article:
+            print(colored(f"Scraping URL: {article['link']}", 'blue'))
+            content = scrape_website(article['link'])
+            if content:
+                article['content'] = content
+                articles_with_content.append(article)
+                print(colored(f"Content scraped for: {article['link']}", 'green'))
+            else:
+                print(colored(f"No content found for: {article['link']}", 'yellow'))
+        else:
+            print(colored(f"No link found in article: {article}", 'red'))
+
+    articles_with_content_json = {"articles": articles_with_content}
+
+    # Split articles into batches of 10 (adjust as needed)
+    batch_size = 10
+    for i in range(0, len(articles_with_content), batch_size):
+        batch = articles_with_content[i:i+batch_size]
+        batch_json = {"articles": batch}
+
+        # Store the batch of scraped articles in the database
+        try:
+            response = requests.post('http://localhost:5000/api/scraped-articles', json=batch_json)
+            response.raise_for_status()
+            print(colored(f"Batch of {len(batch)} scraped articles saved to database successfully", 'green'))
+        except requests.RequestException as e:
+            print(colored(f"Failed to save batch of scraped articles to database: {e}", 'red'))
+
+    with open("D:/VentureInternship/response.txt", "a") as file:
+        file.write(f"\nContent_Scraper_Tool")
+    # Make sure to update state instead of returning a new dict
+    state['articles'] = articles_with_content
+    return state
+
+def fetch_articles_from_api(state):
+    try:
+        response = requests.get('http://localhost:5000/api/scraped-articles')
+        response.raise_for_status()
+        articles = response.json()
+        print(colored(f"Fetched {len(articles)} articles from the API", 'green'))
+        state["articles"] = articles
+        return state
+    except requests.RequestException as e:
+        print(colored(f"Failed to fetch articles from the API: {e}", 'red'))
+        state["articles"] = []
+        return state
+
+def keyword_mapping_tool(state):
+    # Fetch summaries
+    try:
+        summaries_response = requests.get('http://localhost:5000/api/summaries')
+        summaries_response.raise_for_status()
+        summaries = summaries_response.json()
+    except requests.RequestException as e:
+        print(colored(f"Failed to fetch summaries: {e}", 'red'))
+
+    # Fetch keywords
+    try:
+        keywords_response = requests.get('http://localhost:5000/api/keywords')
+        keywords_response.raise_for_status()
+        keywords = keywords_response.json()
+    except requests.RequestException as e:
+        print(colored(f"Failed to fetch keywords: {e}", 'red'))
+
+    # Map keywords to summaries
+    for summary in summaries:
+        matched_keyword_ids = []
+        for keyword in keywords:
+            # Create a regex pattern that matches whole words
+            pattern = r'\b' + re.escape(keyword['keyword']) + r'\b'
+            if re.search(pattern, summary['title'], re.IGNORECASE) or \
+               re.search(pattern, summary['summary'], re.IGNORECASE):
+                matched_keyword_ids.append(keyword['_id'])
+        if matched_keyword_ids:
+            # Update the summary with matched keyword IDs
+            try:
+                update_response = requests.put(
+                    f"http://localhost:5000/api/summaries/{summary['_id']}/keywords",
+                    json={"keyword_ids": matched_keyword_ids}
+                )
+                update_response.raise_for_status()
+                print(colored(f"Updated summary {summary['_id']} with keywords: {matched_keyword_ids}", 'green'))
+            except requests.RequestException as e:
+                print(colored(f"Failed to update summary {summary['_id']}: {e}", 'red'))
+
+    print(colored("Keyword mapping completed.", 'green'))
+    # Make sure to update state instead of returning a new dict
+    state['keyword_mapped_summaries'] = summaries
+    return state
 
 def create_graph(server=None, model=None, stop=None, model_endpoint=None, temperature=0):
     graph = StateGraph(AgentGraphState)
 
-    # KowledgeBaseLoading Node
-    graph.add_node(
-        "knowledgeBase",
-        lambda state: knowledge_base_loader(state)
-    )
-    # Preprocessing Node
-    graph.add_node(
-        "preprocessing",
-        lambda state: preprocessing_tool(state)
-    )
+    # Add nodes
+    graph.add_node("xml_parser_url_collection", xml_parser_url_collection)
+    graph.add_node("xml_parser_new_urls", xml_parser_new_urls)
+    graph.add_node("content_scraper", content_scraper_tool)
+    graph.add_node("fetch_articles", fetch_articles_from_api)
+    graph.add_node("summarizer", lambda state: SummarizerAgent(
+        state=state,
+        model=model,
+        server=server,
+        stop=stop,
+        model_endpoint=model_endpoint,
+        temperature=temperature
+    ).invoke(state))
+    graph.add_node("keyword_mapping", keyword_mapping_tool)
 
-    # Analysis Node 1
-    graph.add_node(
-        "analysis_node1",
-        lambda state: analysis_node1_tool(state)
-    )
+    # Add edges
+    graph.add_edge("xml_parser_url_collection", "xml_parser_new_urls")
+    graph.add_edge("xml_parser_new_urls", "content_scraper")
+    graph.add_edge("content_scraper", "fetch_articles")
+    graph.add_edge("fetch_articles", "summarizer")
+    graph.add_edge("summarizer", "keyword_mapping")
 
-    # Analysis Node 2
-    graph.add_node(
-        "analysis_node2",
-        lambda state: AnalysisNode2Agent(
-            state=state,
-            model=model,
-            server=server,
-            stop=stop,
-            model_endpoint=model_endpoint,
-            temperature=temperature
-        ).invoke(state)
-    )
-
-    # Feedback Generation Node
-    graph.add_node(
-        "feedback_generation",
-        lambda state: FeedbackGenerationAgent(
-            state=state,
-            model=model,
-            server=server,
-            stop=stop,
-            model_endpoint=model_endpoint,
-            temperature=temperature
-        ).invoke(state)
-    )
-
-    # Scoring Node
-    graph.add_node(
-        "scoring",
-        lambda state: ScoringAgent(
-            state=state,
-            model=model,
-            server=server,
-            stop=stop,
-            model_endpoint=model_endpoint,
-            temperature=temperature
-        ).invoke(state)
-    )
-
-    # Paraphrasing Node
-    graph.add_node(
-        "paraphrasing",
-        lambda state: ParaphrasingAgent(
-            state=state,
-            model=model,
-            server=server,
-            stop=stop,
-            model_endpoint=model_endpoint,
-            temperature=temperature
-        ).invoke(state)
-    )
-    
-    graph.add_node(
-    "report_generation",
-    lambda state: format_report()
-    )
-
-
-    # Set the entry point
-    graph.set_entry_point("knowledgeBase")
-
-    # Set the finish point
-    graph.set_finish_point("report_generation")
-
-    # Add edges to connect the nodes
-    graph.add_edge("knowledgeBase", "preprocessing")
-    graph.add_edge("preprocessing", "analysis_node1")
-    graph.add_edge("analysis_node1", "analysis_node2")
-    graph.add_edge("analysis_node2", "feedback_generation")
-    graph.add_edge("feedback_generation", "scoring")
-    graph.add_edge("scoring", "paraphrasing")
-    graph.add_edge("paraphrasing", "report_generation")
-    graph.set_finish_point("report_generation")
+    # Set entry and finish points
+    graph.set_entry_point("xml_parser_url_collection")
+    graph.set_finish_point("keyword_mapping")
 
     return graph
 

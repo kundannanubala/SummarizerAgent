@@ -16,3 +16,20 @@ XML_parser_Tool: Processed 1 URLs, found 50 articles, transferred URLs to urls c
 XML_parser_Tool: Processed 1 URLs, found 50 articles, transferred URLs to urls collection, and deleted from new_urls
 XML_parser_Tool: Processed 1 URLs, found 50 articles, transferred URLs to urls collection, and deleted from new_urls
 XML_parser_Tool: Fetched 45 articles from 4 days ago
+XML_parser_Tool: Fetched 44 articles from 3 days ago
+XML_parser_Tool: Processed 1 URLs, found 50 articles, transferred URLs to urls collection, and deleted from new_urls
+XML_parser_Tool: Fetched 0 articles from 4 days ago
+XML_parser_Tool: Fetched 7 articles from 0 days ago
+XML_parser_Tool: Fetched 8 articles from 0 days ago
+XML_parser_Tool: Fetched 9 articles from 0 days ago
+XML_parser_Tool: Processed 1 URLs, found 50 articles, transferred URLs to urls collection, and deleted from new_urls
+XML_parser_Tool: Fetched 18 articles from 0 days ago
+XML_parser_Tool: Fetched 0 articles from 0 days ago
+XML_parser_Tool: Fetched 2 articles from 4 days ago
+XML_parser_Tool: Fetched 2 articles from 4 days ago
+XML_parser_Tool: Fetched 1 articles from 5 days ago
+XML_parser_Tool: Fetched 2 articles from 4 days ago
+XML_parser_Tool: Fetched 0 articles from 0 days ago
+XML_parser_Tool: Fetched 0 articles from 0 days ago
+XML_parser_Tool: Fetched 0 articles from 0 days ago
+XML_parser_Tool: Fetched 0 articles from 0 days ago

@@ -17,7 +17,7 @@ print("Graph and workflow created.")
 def get_user_input():
     root = tk.Tk()
     root.withdraw()  # Hide the main window
-    user_input = simpledialog.askstring("IELTS Writing Analyzer", "Enter your IELTS writing task:", parent=root)
+    user_input = simpledialog.askstring("Summariser", "Enter start to begin:", parent=root)
     return user_input
 
 def show_results(results):
@@ -39,7 +39,7 @@ if __name__ == "__main__":
 
         limit = {"recursion_limit": iterations}
 
-        print("\nAnalyzing your writing...")
+        print("\nAnalyzing...")
         final_event = None
         for event in workflow.stream(dict_inputs, limit):
             final_event = event
@@ -50,8 +50,8 @@ if __name__ == "__main__":
 
         print("\nAnalysis complete.")
 
-        should_continue = messagebox.askyesno("Continue?", "Would you like to analyze another piece of writing?")
+        should_continue = messagebox.askyesno("Continue?")
         if not should_continue:
             break
 
-print("Thank you for using the IELTS Writing Analyzer!")
+print("Thank you for using!")
