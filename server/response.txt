@@ -1,0 +1,18 @@
+
+XML_parser_Tool: Fetched 50 articles
+XML_parser_Tool: Fetched 1 articles from yesterday
+XML_parser_Tool: Fetched 2 articles from yesterday
+XML_parser_Tool: Processed 1 URLs, found 50 articles
+XML_parser_Tool: Processed 1 URLs, found 50 articles
+XML_parser_Tool: Processed 1 URLs, found 50 articles
+XML_parser_Tool: Processed 1 URLs, found 50 articles
+XML_parser_Tool: Fetched 46 articles from 4 days ago
+XML_parser_Tool: Processed 1 URLs, found 50 articles, and deleted processed URLs
+XML_parser_Tool: Processed 1 URLs, found 50 articles, and deleted processed URLs
+XML_parser_Tool: Processed 1 URLs, found 50 articles, and deleted processed URLs
+XML_parser_Tool: Processed 1 URLs, found 50 articles, and deleted processed URLs
+XML_parser_Tool: Processed 1 URLs, found 50 articles, transferred URLs to urls collection, and deleted from new_urls
+XML_parser_Tool: Processed 1 URLs, found 50 articles, transferred URLs to urls collection, and deleted from new_urls
+XML_parser_Tool: Processed 1 URLs, found 50 articles, transferred URLs to urls collection, and deleted from new_urls
+XML_parser_Tool: Processed 1 URLs, found 50 articles, transferred URLs to urls collection, and deleted from new_urls
+XML_parser_Tool: Fetched 45 articles from 4 days ago
