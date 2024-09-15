@@ -241,6 +241,15 @@ def fetch_articles_from_api(state):
         return state
 
 def keyword_mapping_tool(state):
+    # Fetch scraped articles
+    try:
+        articles_response = requests.get('http://localhost:5000/api/scraped-articles')
+        articles_response.raise_for_status()
+        scraped_articles = articles_response.json()
+    except requests.RequestException as e:
+        print(colored(f"Failed to fetch scraped articles: {e}", 'red'))
+        return state
+
     # Fetch summaries
     try:
         summaries_response = requests.get('http://localhost:5000/api/summaries')
@@ -248,6 +257,7 @@ def keyword_mapping_tool(state):
         summaries = summaries_response.json()
     except requests.RequestException as e:
         print(colored(f"Failed to fetch summaries: {e}", 'red'))
+        return state
 
     # Fetch keywords
     try:
@@ -256,30 +266,40 @@ def keyword_mapping_tool(state):
         keywords = keywords_response.json()
     except requests.RequestException as e:
         print(colored(f"Failed to fetch keywords: {e}", 'red'))
+        return state
 
-    # Map keywords to summaries
-    for summary in summaries:
+    # Create a dictionary to map article titles to their summaries
+    title_to_summary = {summary['title']: summary for summary in summaries}
+
+    # Map keywords to scraped articles and then to summaries
+    for article in scraped_articles:
         matched_keyword_ids = []
         for keyword in keywords:
-            # Create a regex pattern that matches whole words
             pattern = r'\b' + re.escape(keyword['keyword']) + r'\b'
-            if re.search(pattern, summary['title'], re.IGNORECASE) or \
-               re.search(pattern, summary['summary'], re.IGNORECASE):
+            if re.search(pattern, article['title'], re.IGNORECASE) or \
+               re.search(pattern, article['content'], re.IGNORECASE):
                 matched_keyword_ids.append(keyword['_id'])
+
         if matched_keyword_ids:
-            # Update the summary with matched keyword IDs
-            try:
-                update_response = requests.put(
-                    f"http://localhost:5000/api/summaries/{summary['_id']}/keywords",
-                    json={"keyword_ids": matched_keyword_ids}
-                )
-                update_response.raise_for_status()
-                print(colored(f"Updated summary {summary['_id']} with keywords: {matched_keyword_ids}", 'green'))
-            except requests.RequestException as e:
-                print(colored(f"Failed to update summary {summary['_id']}: {e}", 'red'))
+            # Find the corresponding summary
+            summary = title_to_summary.get(article['title'])
+            if summary:
+                # Update the summary with matched keyword IDs
+                try:
+                    update_response = requests.put(
+                        f"http://localhost:5000/api/summaries/{summary['_id']}/keywords",
+                        json={"keyword_ids": matched_keyword_ids}
+                    )
+                    update_response.raise_for_status()
+                    print(colored(f"Updated summary for '{article['title']}' with keywords: {matched_keyword_ids}", 'green'))
+                except requests.RequestException as e:
+                    print(colored(f"Failed to update summary for '{article['title']}': {e}", 'red'))
+            else:
+                print(colored(f"No corresponding summary found for article: '{article['title']}'", 'yellow'))
 
     print(colored("Keyword mapping completed.", 'green'))
-    # Make sure to update state instead of returning a new dict
+
+    # Update state with the keyword-mapped summaries
     state['keyword_mapped_summaries'] = summaries
     return state
 
