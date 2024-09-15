@@ -77,41 +77,46 @@ import requests
 class SummarizerAgent(Agent):
     def invoke(self, state):
         articles = state.get("articles", [])
-        prompt = summarization_prompt_template.format(articles=json.dumps(articles, indent=2))
-
-        messages = [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": "Please provide your summaries."}
-        ]
-
         llm = self.get_llm()
-        ai_msg = llm.invoke(messages)
+        all_summaries = []
+        batch_size = 4
 
-        # Log the response
-        with open("D:/VentureInternship/AI Agent/ProjectK/response.txt", 'a') as file:
-            file.write(f'\nSummarizer response:{ai_msg.content}\n')
+        for i in range(0, len(articles), batch_size):
+            batch = articles[i:i+batch_size]
+            prompt = summarization_prompt_template.format(articles=json.dumps(batch, indent=2))
+
+            messages = [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": "Please provide your summaries."}
+            ]
+
+            ai_msg = llm.invoke(messages)
+
+            # Log the response
+            with open("D:/VentureInternship/AI Agent/ProjectK/response.txt", 'a') as file:
+                file.write(f'\nSummarizer response for batch {i//batch_size + 1}:{ai_msg.content}\n')
+
+            # Parse the summaries
+            try:
+                batch_summaries = json.loads(ai_msg.content)["summaries"]
+                all_summaries.extend(batch_summaries)
+            except json.JSONDecodeError:
+                print(colored(f"Failed to parse summarizer response as JSON for batch {i//batch_size + 1}", 'red'))
 
         # Update the state with the agent's response
         state["messages"].append(
-            HumanMessage(role="summarizer", content=ai_msg.content)
+            HumanMessage(role="summarizer", content=json.dumps({"summaries": all_summaries}))
         )
 
-        # Parse the summaries and store them in the database
+        # Store summaries in the database
         try:
-            summaries = json.loads(ai_msg.content)["summaries"]
+            response = requests.post('http://localhost:5000/api/summaries', json={"summaries": all_summaries})
+            response.raise_for_status()
+            print(colored(f"Stored {len(all_summaries)} summaries in the database", 'green'))
 
-            # Store summaries in the database
-            try:
-                response = requests.post('http://localhost:5000/api/summaries', json={"summaries": summaries})
-                response.raise_for_status()
-                print(colored(f"Stored {len(summaries)} summaries in the database", 'green'))
-
-                # Add the stored summaries to the state
-                state["summaries"] = summaries
-            except requests.RequestException as e:
-                print(colored(f"Failed to store summaries in the database: {e}", 'red'))
-
-        except json.JSONDecodeError:
-            print(colored("Failed to parse summarizer response as JSON", 'red'))
+            # Add the stored summaries to the state
+            state["summaries"] = all_summaries
+        except requests.RequestException as e:
+            print(colored(f"Failed to store summaries in the database: {e}", 'red'))
 
         return state

@@ -10,6 +10,7 @@ import json
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 import re
+from bson import ObjectId
 
 def xml_parser_url_collection(state):
     # Fetch URLs from the urls collection using the defined route
@@ -22,7 +23,7 @@ def xml_parser_url_collection(state):
         return {"articles": []}
 
     articles = []
-    days_ago = 0 # Adjust this value to change the date range
+    days_ago = 1 # Adjust this value to change the date range
     target_date = (datetime.utcnow() - timedelta(days=days_ago)).date()
 
     for url in rss_feed_urls:
@@ -141,6 +142,7 @@ def xml_parser_new_urls(state):
             # Prepare the URL document for the urls collection
             url_data = {
                 'url': url_doc['url'],
+                'domain': url_doc['domain'],
                 'dateAdded': url_doc.get('dateAdded', datetime.utcnow().isoformat()),
                 'lastChecked': url_doc.get('lastChecked', datetime.utcnow().isoformat()),
                 'status': url_doc.get('status', 'active')
@@ -166,7 +168,9 @@ def xml_parser_new_urls(state):
 
     # Make sure to update state instead of returning a new dict
     # state['articles'] += parsed_articles['articles']
-    state['articles'] = parsed_articles['articles']
+    
+    #state['articles'] = parsed_articles['articles']
+    state['articles']='kundan'
     return state
 
 def scrape_website(url):
@@ -229,10 +233,12 @@ def content_scraper_tool(state):
 
 def fetch_articles_from_api(state):
     try:
-        response = requests.get('http://localhost:5000/api/scraped-articles')
+        # Make the API request to get today's scraped articles
+        response = requests.get('http://localhost:5000/api/scraped-articles/today')
         response.raise_for_status()
         articles = response.json()
-        print(colored(f"Fetched {len(articles)} articles from the API", 'green'))
+
+        print(colored(f"Fetched {len(articles)} articles scraped today from the API", 'green'))
         state["articles"] = articles
         return state
     except requests.RequestException as e:

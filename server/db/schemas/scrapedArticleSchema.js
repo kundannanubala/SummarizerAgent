@@ -5,6 +5,6 @@ const scrapedArticleSchema = {
     published_date: { type: 'date', required: true },
     content: { type: 'string', required: true },
     scraped_at: { type: 'date', default: Date.now }
-  };
-  
-  module.exports = scrapedArticleSchema;
+};
+
+module.exports = scrapedArticleSchema;

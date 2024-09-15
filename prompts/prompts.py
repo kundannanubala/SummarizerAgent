@@ -18,6 +18,8 @@ Your response must take the following json format:
             "summary": "Concise summary of the article, highlighting the relevant keyword",
             "source": "URL of the article",
             "xml_url":"The xml_url field of the article",
+            "author":"The author of the article",
+            "published_date":"The published date of the article"
         }},
         ...
     ]

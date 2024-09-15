@@ -14,6 +14,16 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET today's scraped articles
+router.get('/today', async (req, res) => {
+  try {
+    const articles = await ScrapedArticle.findToday();
+    res.json(articles);
+  } catch (error) {
+    res.status(500).json({ error: 'An error occurred while fetching today\'s scraped articles' });
+  }
+});
+
 // POST scraped articles
 router.post('/', async (req, res) => {
   try {
