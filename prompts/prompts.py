@@ -16,7 +16,8 @@ Your response must take the following json format:
         {{
             "title": "Title of the article",
             "summary": "Concise summary of the article, highlighting the relevant keyword",
-            "source": "URL of the article"
+            "source": "URL of the article",
+            "xml_url":"The xml_url field of the article",
         }},
         ...
     ]

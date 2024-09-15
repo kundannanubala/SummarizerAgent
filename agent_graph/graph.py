@@ -52,6 +52,7 @@ def xml_parser_url_collection(state):
                         "link": entry.get("link", "No Link"),
                         "author": entry.get("author", "Unknown Author"),
                         "published_date": published_date.isoformat(),
+                        "xml_url":url,
                     }
                     articles.append(article)
 
@@ -107,6 +108,7 @@ def xml_parser_new_urls(state):
                     "link": entry.get("link", "No Link"),
                     "author": entry.get("author", "Unknown Author"),
                     "published_date": entry.get("published", "Unknown Date"),
+                    "xml_url":url,
                 }
                 articles.append(article)
 
