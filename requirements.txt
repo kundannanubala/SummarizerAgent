@@ -6,3 +6,7 @@ beautifulsoup4==4.12.3
 # windows-curses==2.3.3
 termcolor==2.4.0
 chainlit==1.1.202
+google-cloud-aiplatform
+anthropic[vertex]
+feedparser
+bson
